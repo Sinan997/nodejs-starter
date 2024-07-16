@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User, { UserDocument } from '../models/user';
-import RefreshToken from '../models/refresh-token';
 import { LoginRequestBody, UserJwtPayload } from '../interfaces/auth';
 import { LogoutRequestBody } from '../interfaces/auth/logout-request-body';
 
@@ -39,9 +38,6 @@ const loginController = async (req: Request<{}, {}, LoginRequestBody>, res: Resp
     const accessToken = generateToken(user, process.env.JWT_SECRET_KEY, '1h');
     const refreshToken = generateToken(user, process.env.JWT_REFRESH_KEY, '1d');
 
-    await RefreshToken.deleteMany({ userId: user._id });
-    await new RefreshToken({ token: refreshToken, userId: user._id }).save();
-
     return res.status(200).json({
       accessToken,
       refreshToken,
@@ -54,32 +50,12 @@ const loginController = async (req: Request<{}, {}, LoginRequestBody>, res: Resp
   }
 };
 
-const logoutController = async (req: Request<{}, {}, LogoutRequestBody>, res: Response) => {
-  const { refreshToken } = req.body;
-
-  try {
-    await RefreshToken.deleteOne({ token: refreshToken });
-    return res.status(200).json({ message: 'Logout completed successfully.' });
-  } catch (error) {
-    console.log(error);
-    return res.status(500).json({ code: 'SERVER_ERROR', message: 'Server failed.' });
-  }
-};
-
 const refreshTokenController = async (req: Request<{}, {}, LogoutRequestBody>, res: Response) => {
   const { refreshToken } = req.body;
   try {
     if (!refreshToken) {
       return res.status(403).json({ code: 'REFRESH_TOKEN_NOT_FOUND_BODY', message: 'Refresh token not found.' });
     }
-
-    const isRefreshTokenExistInDb = await RefreshToken.findOne({ token: refreshToken });
-
-    if (!isRefreshTokenExistInDb) {
-      return res.status(403).json({ code: 'REFRESH_TOKEN_NOT_FOUND_DB', message: 'Refresh token not found.' });
-    }
-
-    await RefreshToken.findOneAndDelete({ token: refreshToken });
 
     const decodedToken = jwt.decode(refreshToken) as UserJwtPayload;
 
@@ -100,8 +76,6 @@ const refreshTokenController = async (req: Request<{}, {}, LogoutRequestBody>, r
     const newAccessToken = generateToken(user, process.env.JWT_SECRET_KEY, '1h');
     const newRefreshToken = generateToken(user, process.env.JWT_REFRESH_KEY, '1d');
 
-    await new RefreshToken({ token: newRefreshToken, userId: user._id }).save();
-
     return res.status(200).json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
   } catch (error) {
     console.log(error);
@@ -109,4 +83,4 @@ const refreshTokenController = async (req: Request<{}, {}, LogoutRequestBody>, r
   }
 };
 
-export { loginController, logoutController, refreshTokenController };
+export { loginController, refreshTokenController };
